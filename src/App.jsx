@@ -113,24 +113,33 @@ function parseTag(text,tag){
 }
 
 function buildUnifiedPrompt(input,res){
-  const c=`Consumo ${input.consumo.toLocaleString()}kWh/anno | Zona ${input.zona} | Tetto ${input.tetto} | Superficie ${input.superficie}m² | Potenza ${res.potenzaArr}kWp | ${res.nPannelli} pannelli | Produzione ${res.produzioneAnnua.toLocaleString()}kWh/anno | Autoconsumo ${res.autoconsumo.toLocaleString()}kWh (${input.autoconsumoPerc}%) | Immissione ${res.immissione.toLocaleString()}kWh | Risparmio €${res.risparmioTotale.toLocaleString()}/anno | Costo €${res.costoImpianto.toLocaleString()} | Payback ${res.payback}anni | CO₂ ${res.co2.toLocaleString()}kg`;
-  return `Sei un consulente senior fotovoltaico. Analizza questo impianto e rispondi ESATTAMENTE nel formato XML seguente, senza testo fuori dai tag. Italiano. Max 2 frasi per KPI. **grassetto** per numeri chiave. Zero filler.
+  const risparmioAuto=Math.round(res.autoconsumo*COSTO_KWH);
+  const risparmioImm=Math.round(res.immissione*0.09);
+  const copertura=Math.round(res.produzioneAnnua/input.consumo*100);
+  const rendimento=((res.risparmioTotale/res.costoImpianto)*100).toFixed(1);
+  const pannelliM2=Math.round(res.nPannelli*PANEL_M2);
+  const superficieLibera=input.superficie-pannelliM2;
+  const c=`Consumo: ${input.consumo.toLocaleString()} kWh/anno | Zona: ${input.zona} | Tetto: ${input.tetto} | Superficie tetto: ${input.superficie} m² | Potenza impianto: ${res.potenzaArr} kWp | Numero pannelli: ${res.nPannelli} (occupano ~${pannelliM2} m², liberi ${superficieLibera} m²) | Produzione annua: ${res.produzioneAnnua.toLocaleString()} kWh (copre il ${copertura}% del fabbisogno) | Autoconsumo: ${res.autoconsumo.toLocaleString()} kWh (${input.autoconsumoPerc}%) → risparmio €${risparmioAuto.toLocaleString()} | Immissione in rete: ${res.immissione.toLocaleString()} kWh → ricavo €${risparmioImm.toLocaleString()} | Risparmio totale: €${res.risparmioTotale.toLocaleString()}/anno | Costo impianto: €${res.costoImpianto.toLocaleString()} | Payback: ${res.payback} anni | Rendimento annuo: ${rendimento}% | CO₂ evitata: ${res.co2.toLocaleString()} kg/anno`;
+  return `Sei un consulente senior fotovoltaico che sta preparando una scheda tecnica professionale per un cliente industriale/commerciale italiano. Analizza i dati dell'impianto e compila ogni sezione XML con un'analisi concreta, utile e commercialmente rilevante. Usa **grassetto** per i numeri e i concetti chiave. Scrivi in italiano professionale. Rispondi SOLO con i tag XML richiesti, nessun testo fuori.
+
+DATI IMPIANTO:
+${c}
 
 <verdetto>
-ESITO: [Consigliato / Non consigliato / Consigliato con riserva]
-MOTIVAZIONE: [max 12 parole]
-NOTA: [2 frasi operative per il commerciale, **grassetto** per punti critici]
+ESITO: [scrivi esattamente uno tra: Consigliato / Non consigliato / Consigliato con riserva]
+MOTIVAZIONE: [una frase sintetica che spiega il giudizio, max 15 parole]
+NOTA: [2-3 frasi operative per il commerciale: punti di forza da valorizzare in trattativa, eventuali obiezioni prevedibili e come rispondervi, azione consigliata. **Grassetto** sui punti critici.]
 </verdetto>
-<potenza>[Potenza ${res.potenzaArr}kWp: limitata da consumo o superficie? Margine espansione?]</potenza>
-<pannelli>[${res.nPannelli} pannelli su ${input.superficie}m²: densità occupata? Superficie libera?]</pannelli>
-<produzione>[Produzione copre quale % del fabbisogno? Buon risultato per zona ${input.zona}?]</produzione>
-<risparmio>[Scomponi €${res.risparmioTotale.toLocaleString()}/anno: autoconsumo €${Math.round(res.autoconsumo*COSTO_KWH).toLocaleString()} vs immissione €${Math.round(res.immissione*0.09).toLocaleString()}. Peso relativo?]</risparmio>
-<co2>[${res.co2.toLocaleString()}kg CO₂/anno: equivalenze concrete (auto, alberi). Vantaggio ESG?]</co2>
-<costo>[€${res.costoImpianto.toLocaleString()}: incentivi applicabili (Transizione 5.0, detrazione 50%)? Costo netto?]</costo>
-<payback>[Payback ${res.payback}anni vs media 6-9a. Rendimento % annuo sull'investimento?]</payback>
-<autoconsumo>[${input.autoconsumoPerc}% autoconsumo: coerente col profilo d'uso? Conviene accumulo?]</autoconsumo>
+<potenza>Valuta se i **${res.potenzaArr} kWp** sono stati dimensionati sul consumo o sulla superficie disponibile, e quale dei due fattori è il vero vincolo. Indica se c'è margine per ampliamenti futuri e in quale condizione avrebbe senso. Concludi con un giudizio sul dimensionamento (ottimale / conservativo / aggressivo).</potenza>
+<pannelli>I **${res.nPannelli} pannelli** occupano circa **${pannelliM2} m²** dei ${input.superficie} m² disponibili (restano liberi ~${superficieLibera} m²). Valuta la densità di occupazione del tetto e se la superficie residua è significativa per una futura espansione. Commenta anche sull'adeguatezza della tecnologia standard da **0.42 kWp/pannello** per questo tipo di installazione.</pannelli>
+<produzione>La produzione di **${res.produzioneAnnua.toLocaleString()} kWh/anno** copre il **${copertura}% del fabbisogno** da ${input.consumo.toLocaleString()} kWh/anno. Contestualizza questo risultato rispetto alla zona geografica **${input.zona}** (irraggiamento tipico) e all'orientamento del tetto **${input.tetto}**. Indica se la copertura è buona, bassa o eccellente per il profilo e suggerisci come migliorarla se necessario.</produzione>
+<risparmio>Il risparmio annuo di **€${res.risparmioTotale.toLocaleString()}** si compone di **€${risparmioAuto.toLocaleString()} da autoconsumo** (energia non acquistata a €0.28/kWh) e **€${risparmioImm.toLocaleString()} da immissione in rete** (GSE a ~€0.09/kWh). Commenta il peso relativo delle due voci e cosa implica per la strategia del cliente: se conviene massimizzare l'autoconsumo spostando i carichi nelle ore solari, o se l'immissione è comunque redditizia. Includi una stima dell'evoluzione del risparmio nei prossimi 5 anni considerando l'inflazione energetica al 3%.</risparmio>
+<co2>I **${res.co2.toLocaleString()} kg di CO₂ evitati ogni anno** equivalgono a cifre concrete comprensibili al cliente (km percorsi in auto, alberi piantati, famiglie alimentate). Valuta il vantaggio ESG e la rilevanza per certificazioni ambientali, rendicontazione di sostenibilità (es. Scope 2 GHG Protocol) o comunicazione verso clienti e stakeholder.</co2>
+<costo>L'investimento di **€${res.costoImpianto.toLocaleString()}** (a ~€1.450/kWp) è in linea con i prezzi di mercato 2024-2025 per impianti commerciali. Indica quali incentivi fiscali sono applicabili: **Transizione 5.0** (credito d'imposta fino al 35-45%), **detrazione 50%** per immobili non industriali, o **Super Ammortamento**. Stima il costo netto dopo incentivi e segnala eventuali condizioni per accedervi.</costo>
+<payback>Il payback di **${res.payback} anni** va confrontato con la media di mercato (6-9 anni per impianti commerciali ben dimensionati). Il rendimento implicito è del **${rendimento}% annuo** sull'investimento, ben superiore a strumenti finanziari tradizionali. Valuta il rischio dell'investimento considerando la vita utile dell'impianto (25-30 anni), il degrado dei pannelli (~0.5%/anno) e la volatilità del prezzo dell'energia.</payback>
+<autoconsumo>Con un autoconsumo al **${input.autoconsumoPerc}%**, il cliente assorbe direttamente ${res.autoconsumo.toLocaleString()} kWh dei ${res.produzioneAnnua.toLocaleString()} kWh prodotti. Valuta se questa percentuale è coerente con il profilo produttivo (es. attività diurna vs. notturna, weekend). Indica se ha senso integrare un sistema di accumulo (batterie) per aumentare l'autoconsumo, e da quale soglia produttiva diventerebbe economicamente vantaggioso.</autoconsumo>
 
-Dati: ${c}`;
+DATI IMPIANTO (ripetuti per contesto): ${c}`;
 }
 
 export default function App(){

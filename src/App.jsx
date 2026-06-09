@@ -97,7 +97,8 @@ function PopFlash({children,color,ready}){
 }
 
 async function fetchAI(prompt){
-  const key=typeof import.meta!=="undefined"&&import.meta.env?.VITE_ANTHROPIC_KEY;
+  const key=import.meta.env.VITE_ANTHROPIC_KEY;
+  console.log("[fetchAI] VITE_ANTHROPIC_KEY:", key ? "SET ("+key.substring(0,8)+"...)" : "MISSING");
   const headers={"Content-Type":"application/json","anthropic-dangerous-direct-browser-access":"true","anthropic-version":"2023-06-01"};
   if(key) headers["x-api-key"]=key;
   const rsp=await fetch("https://api.anthropic.com/v1/messages",{method:"POST",headers,body:JSON.stringify({model:"claude-sonnet-4-20250514",max_tokens:300,messages:[{role:"user",content:prompt}]})});

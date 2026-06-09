@@ -97,12 +97,15 @@ function PopFlash({children,color,ready}){
 }
 
 async function fetchAI(prompt){
-  const key=import.meta.env.VITE_GEMINI_KEY;
-  const url=`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${key}`;
-  const rsp=await fetch(url,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({contents:[{parts:[{text:prompt}]}],generationConfig:{maxOutputTokens:2048}})});
+  const key=import.meta.env.VITE_GROQ_KEY;
+  const rsp=await fetch("https://api.groq.com/openai/v1/chat/completions",{
+    method:"POST",
+    headers:{"Content-Type":"application/json","Authorization":`Bearer ${key}`},
+    body:JSON.stringify({model:"llama-3.3-70b-versatile",messages:[{role:"user",content:prompt}],max_tokens:2048})
+  });
   const data=await rsp.json();
   if(data.error)throw new Error(JSON.stringify(data.error));
-  return data.candidates?.[0]?.content?.parts?.[0]?.text||"";
+  return data.choices?.[0]?.message?.content||"";
 }
 function parseTag(text,tag){
   const m=text.match(new RegExp(`<${tag}>([\\s\\S]*?)<\\/${tag}>`));

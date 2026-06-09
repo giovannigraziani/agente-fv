@@ -97,30 +97,37 @@ function PopFlash({children,color,ready}){
 }
 
 async function fetchAI(prompt){
-  const key=import.meta.env.VITE_ANTHROPIC_KEY;
-  console.log("[fetchAI] VITE_ANTHROPIC_KEY:", key ? "SET ("+key.substring(0,8)+"...)" : "MISSING");
-  const headers={"Content-Type":"application/json","anthropic-dangerous-direct-browser-access":"true","anthropic-version":"2023-06-01"};
-  if(key) headers["x-api-key"]=key;
-  const rsp=await fetch("https://api.anthropic.com/v1/messages",{method:"POST",headers,body:JSON.stringify({model:"claude-sonnet-4-20250514",max_tokens:300,messages:[{role:"user",content:prompt}]})});
+  const key=import.meta.env.VITE_GEMINI_KEY;
+  const url=`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${key}`;
+  const rsp=await fetch(url,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({contents:[{parts:[{text:prompt}]}],generationConfig:{maxOutputTokens:2048}})});
   const data=await rsp.json();
   if(data.error)throw new Error(JSON.stringify(data.error));
-  return data.content?.find(b=>b.type==="text")?.text||"";
+  return data.candidates?.[0]?.content?.parts?.[0]?.text||"";
 }
-const delay=ms=>new Promise(r=>setTimeout(r,ms));
+function parseTag(text,tag){
+  const m=text.match(new RegExp(`<${tag}>([\\s\\S]*?)<\\/${tag}>`));
+  return m?m[1].trim():"";
+}
 
-function buildKpiPrompts(input,res){
-  const rule="IT. Max 2 frasi. Dati oggettivi. **grassetto** per numeri chiave. Zero filler.";
-  const c=`${res.potenzaArr}kWp|${res.nPannelli}pan|${res.produzioneAnnua.toLocaleString()}kWh prod|${input.consumo.toLocaleString()}kWh cons|${input.zona}|${input.tetto}|${input.superficie}m²|${res.autoconsumo.toLocaleString()}kWh autoc(${input.autoconsumoPerc}%)|${res.immissione.toLocaleString()}kWh imm|€${res.risparmioTotale.toLocaleString()}/a risp|€${res.costoImpianto.toLocaleString()} costo|${res.payback}a payback|${res.co2.toLocaleString()}kg CO₂`;
-  return {
-    potenza:`${rule}\n${c}\nPotenza ${res.potenzaArr}kWp: limitata da consumo o superficie? Margine espansione?`,
-    pannelli:`${rule}\n${c}\n${res.nPannelli} pannelli su ${input.superficie}m²: densità occupata? Superficie libera residua?`,
-    produzione:`${rule}\n${c}\nProduzione copre quale % del fabbisogno? Buon risultato per zona ${input.zona}?`,
-    risparmio:`${rule}\n${c}\nScomponi €${res.risparmioTotale.toLocaleString()}/a: quota autoconsumo €${Math.round(res.autoconsumo*COSTO_KWH).toLocaleString()} vs immissione €${Math.round(res.immissione*0.09).toLocaleString()}. Peso relativo?`,
-    co2:`${rule}\n${c}\n${res.co2.toLocaleString()}kg CO₂/a: equivalenze concrete (auto, alberi). Vantaggio ESG?`,
-    costo:`${rule}\n${c}\nCosto €${res.costoImpianto.toLocaleString()}: incentivi applicabili (Transizione 5.0, detrazione 50%)? Costo netto stimato?`,
-    payback:`${rule}\n${c}\nPayback ${res.payback}a vs media settore 6-9a. Rendimento % annuo sull'investimento?`,
-    autoconsumo:`${rule}\n${c}\n${input.autoconsumoPerc}% autoconsumo: coerente col profilo d'uso? Conviene accumulo?`,
-  };
+function buildUnifiedPrompt(input,res){
+  const c=`Consumo ${input.consumo.toLocaleString()}kWh/anno | Zona ${input.zona} | Tetto ${input.tetto} | Superficie ${input.superficie}m² | Potenza ${res.potenzaArr}kWp | ${res.nPannelli} pannelli | Produzione ${res.produzioneAnnua.toLocaleString()}kWh/anno | Autoconsumo ${res.autoconsumo.toLocaleString()}kWh (${input.autoconsumoPerc}%) | Immissione ${res.immissione.toLocaleString()}kWh | Risparmio €${res.risparmioTotale.toLocaleString()}/anno | Costo €${res.costoImpianto.toLocaleString()} | Payback ${res.payback}anni | CO₂ ${res.co2.toLocaleString()}kg`;
+  return `Sei un consulente senior fotovoltaico. Analizza questo impianto e rispondi ESATTAMENTE nel formato XML seguente, senza testo fuori dai tag. Italiano. Max 2 frasi per KPI. **grassetto** per numeri chiave. Zero filler.
+
+<verdetto>
+ESITO: [Consigliato / Non consigliato / Consigliato con riserva]
+MOTIVAZIONE: [max 12 parole]
+NOTA: [2 frasi operative per il commerciale, **grassetto** per punti critici]
+</verdetto>
+<potenza>[Potenza ${res.potenzaArr}kWp: limitata da consumo o superficie? Margine espansione?]</potenza>
+<pannelli>[${res.nPannelli} pannelli su ${input.superficie}m²: densità occupata? Superficie libera?]</pannelli>
+<produzione>[Produzione copre quale % del fabbisogno? Buon risultato per zona ${input.zona}?]</produzione>
+<risparmio>[Scomponi €${res.risparmioTotale.toLocaleString()}/anno: autoconsumo €${Math.round(res.autoconsumo*COSTO_KWH).toLocaleString()} vs immissione €${Math.round(res.immissione*0.09).toLocaleString()}. Peso relativo?]</risparmio>
+<co2>[${res.co2.toLocaleString()}kg CO₂/anno: equivalenze concrete (auto, alberi). Vantaggio ESG?]</co2>
+<costo>[€${res.costoImpianto.toLocaleString()}: incentivi applicabili (Transizione 5.0, detrazione 50%)? Costo netto?]</costo>
+<payback>[Payback ${res.payback}anni vs media 6-9a. Rendimento % annuo sull'investimento?]</payback>
+<autoconsumo>[${input.autoconsumoPerc}% autoconsumo: coerente col profilo d'uso? Conviene accumulo?]</autoconsumo>
+
+Dati: ${c}`;
 }
 
 export default function App(){
@@ -145,32 +152,22 @@ export default function App(){
     setRisultato(res);
     setKpiTexts({});setKpiLoading({});setSelectedKpi(null);setVerdetto(null);
 
-    const prompts=buildKpiPrompts(input,res);
-    const lm={};Object.keys(prompts).forEach(k=>lm[k]=true);
+    const kpiKeys=["potenza","pannelli","produzione","risparmio","co2","costo","payback","autoconsumo"];
+    const lm={};kpiKeys.forEach(k=>lm[k]=true);
     setKpiLoading(lm);setVerdLoading(true);
 
-    const verdPrompt=`Sei un consulente senior FV. Analizza questo impianto e rispondi ESATTAMENTE in questo formato (non aggiungere altro):
-ESITO: [scrivi solo: Consigliato / Non consigliato / Consigliato con riserva]
-MOTIVAZIONE: [massimo 12 parole che spiegano l'esito]
-NOTA: [2 frasi operative per il commerciale, usa **grassetto** per i punti critici]
-Dati: Consumo ${input.consumo.toLocaleString()} kWh/anno | Zona ${input.zona} | Potenza ${res.potenzaArr} kWp | Risparmio €${res.risparmioTotale.toLocaleString()}/anno | Costo €${res.costoImpianto.toLocaleString()} | Payback ${res.payback} anni | Copertura: ${Math.round(res.produzioneAnnua/input.consumo*100)}%`;
-
-    const allTasks=[{key:"__verdetto__",prompt:verdPrompt},...Object.entries(prompts).map(([key,prompt])=>({key,prompt}))];
-    const BATCH=2;
     (async()=>{
-      for(let i=0;i<allTasks.length;i+=BATCH){
-        const batch=allTasks.slice(i,i+BATCH);
-        await Promise.all(batch.map(async({key,prompt})=>{
-          try{
-            const t=await fetchAI(prompt);
-            if(key==="__verdetto__"){setVerdetto(t);setVerdLoading(false);}
-            else{setKpiTexts(p=>({...p,[key]:t}));setKpiLoading(p=>({...p,[key]:false}));}
-          }catch(err){
-            if(key==="__verdetto__"){setVerdetto("ESITO: Consigliato con riserva\nMOTIVAZIONE: Errore nel recupero dati.\nNOTA: Riprovare.");setVerdLoading(false);}
-            else{setKpiTexts(p=>({...p,[key]:"Analisi non disponibile."}));setKpiLoading(p=>({...p,[key]:false}));}
-          }
-        }));
-        if(i+BATCH<allTasks.length)await delay(200);
+      try{
+        const t=await fetchAI(buildUnifiedPrompt(input,res));
+        setVerdetto(parseTag(t,"verdetto")||"ESITO: Consigliato con riserva\nMOTIVAZIONE: Errore nel recupero dati.\nNOTA: Riprovare.");
+        setVerdLoading(false);
+        const texts={};kpiKeys.forEach(k=>{texts[k]=parseTag(t,k)||"Analisi non disponibile.";});
+        setKpiTexts(texts);setKpiLoading({});
+      }catch(err){
+        setVerdetto("ESITO: Consigliato con riserva\nMOTIVAZIONE: Errore nel recupero dati.\nNOTA: Riprovare.");
+        setVerdLoading(false);
+        const texts={};kpiKeys.forEach(k=>{texts[k]="Analisi non disponibile.";});
+        setKpiTexts(texts);setKpiLoading({});
       }
     })();
 
@@ -479,4 +476,4 @@ Dati: Consumo ${input.consumo.toLocaleString()} kWh/anno | Zona ${input.zona} | 
       </div>
     </div>
   );
-}
+}                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     

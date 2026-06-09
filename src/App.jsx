@@ -98,7 +98,7 @@ function PopFlash({children,color,ready}){
 
 async function fetchAI(prompt){
   const key=import.meta.env.VITE_GEMINI_KEY;
-  const url=`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${key}`;
+  const url=`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${key}`;
   const rsp=await fetch(url,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({contents:[{parts:[{text:prompt}]}],generationConfig:{maxOutputTokens:2048}})});
   const data=await rsp.json();
   if(data.error)throw new Error(JSON.stringify(data.error));
